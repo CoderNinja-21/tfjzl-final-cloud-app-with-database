@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 # <HINT> Import any new Models here
-from .models import Course, Enrollment
+from .models import Course, Enrollment, Submission
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
@@ -112,7 +112,14 @@ def enroll(request, course_id):
          # Redirect to show_exam_result with the submission id
 
 def submit(request, course_id):
-    return HttpResponse("Exam submission will be implemented in the next lab.")
+    course = get_object_or_404(Course, pk=course_id)
+    user = request.user
+    enrollment = Enrollment.objects.get(user=user, course=course)
+    submission = Submission.objects.create(enrollment=enrollment)
+    submission.choices.set(extract_answers(request))
+    return HttpResponseRedirect(
+        reverse('onlinecourse:show_exam_result', args=(course.id, submission.id))
+    )
 
 # An example method to collect the selected choices from the exam form from the request object
 def extract_answers(request):
@@ -134,4 +141,24 @@ def extract_answers(request):
 #def show_exam_result(request, course_id, submission_id):
 
 
+def show_exam_result(request, course_id, submission_id):
+    course = get_object_or_404(Course, pk=course_id)
+    submission = get_object_or_404(Submission, pk=submission_id)
+    choices = submission.choices.all()
+
+    total_score = 0
+    total_mark = 0
+    for question in course.question_set.all():
+        total_mark += question.grade
+        if question.is_get_score(choices):
+            total_score += question.grade
+
+    grade = int(total_score / total_mark * 100) if total_mark else 0
+
+    context = {
+        'course': course,
+        'grade': grade,
+        'choices': choices,
+    }
+    return render(request, 'onlinecourse/exam_result_bootstrap.html', context)
 
